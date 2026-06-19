@@ -1,0 +1,32 @@
+---
+name: Release to Galaxy
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Publish to Galaxy
+        run: ansible-galaxy role import --token ${{ secrets.GALAXY_API_KEY }} mikinhas ansible-role-proxmox

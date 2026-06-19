@@ -1,0 +1,6 @@
+---
+- name: Include firewall tasks
+  ansible.builtin.include_tasks: firewall.yml
+  when: proxmox_firewall_manage
+  tags:
+    - firewall
