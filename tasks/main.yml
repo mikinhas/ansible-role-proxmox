@@ -10,3 +10,15 @@
   when: proxmox_firewall_manage
   tags:
     - firewall
+
+- name: Include VM template tasks
+  ansible.builtin.include_tasks: template.yml
+  when: proxmox_template_manage
+  tags:
+    - template
+
+- name: Include VM tasks
+  ansible.builtin.include_tasks: vm.yml
+  when: proxmox_vm_manage
+  tags:
+    - vm

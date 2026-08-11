@@ -1,0 +1,13 @@
+---
+- name: Ensure the cloud image cache directory exists
+  ansible.builtin.file:
+    path: "{{ proxmox_template_image_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Build cloud-init templates
+  ansible.builtin.include_tasks: template_create.yml
+  loop: "{{ proxmox_templates }}"
+  loop_control:
+    loop_var: proxmox_template
+    label: "{{ proxmox_template.name }} ({{ proxmox_template.vmid }})"

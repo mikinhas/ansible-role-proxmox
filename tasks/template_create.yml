@@ -1,0 +1,87 @@
+---
+- name: "Build template {{ proxmox_template.name }}"
+  vars:
+    proxmox_template_image: "{{ proxmox_template_image_dir }}/{{ proxmox_template.image_url | basename }}"
+  module_defaults:
+    community.proxmox.proxmox_vm_info: &pve_api
+      api_host: "{{ proxmox_api_host }}"
+      api_user: "{{ proxmox_api_user }}"
+      api_password: "{{ proxmox_api_password or omit }}"
+      api_token_id: "{{ proxmox_api_token_id or omit }}"
+      api_token_secret: "{{ proxmox_api_token_secret or omit }}"
+      validate_certs: "{{ proxmox_api_validate_certs }}"
+    community.proxmox.proxmox_kvm: *pve_api
+    community.proxmox.proxmox_disk: *pve_api
+  block:
+    - name: "Gather existing QEMU VMs on {{ proxmox_node }}"
+      community.proxmox.proxmox_vm_info:
+        node: "{{ proxmox_node }}"
+        type: qemu
+      delegate_to: localhost
+      register: proxmox_template_existing
+
+    - name: "Create template {{ proxmox_template.name }}"
+      when: >-
+        proxmox_template.vmid | int
+        not in (proxmox_template_existing.proxmox_vms | map(attribute='vmid') | map('int') | list)
+      block:
+        - name: "Download the cloud image for {{ proxmox_template.name }}"
+          ansible.builtin.get_url:
+            url: "{{ proxmox_template.image_url }}"
+            dest: "{{ proxmox_template_image }}"
+            checksum: "{{ proxmox_template.image_checksum | default(omit) }}"
+            timeout: "{{ proxmox_template_download_timeout }}"
+            mode: "0644"
+
+        - name: "Create the VM shell for {{ proxmox_template.name }}"
+          community.proxmox.proxmox_kvm:
+            node: "{{ proxmox_node }}"
+            vmid: "{{ proxmox_template.vmid }}"
+            name: "{{ proxmox_template.name }}"
+            cores: "{{ proxmox_template.cores | default(2) }}"
+            memory: "{{ proxmox_template.memory | default(2048) }}"
+            scsihw: virtio-scsi-single
+            net:
+              net0: "virtio,bridge={{ proxmox_template.bridge | default('vmbr0') }}"
+            ide:
+              ide2: "{{ proxmox_template.storage }}:cloudinit"
+            serial:
+              serial0: socket
+            vga: serial0
+            agent: "enabled=1"
+            ostype: l26
+            cpu: host
+            machine: q35
+          delegate_to: localhost
+
+        - name: "Import the disk for {{ proxmox_template.name }}"
+          community.proxmox.proxmox_disk:
+            vmid: "{{ proxmox_template.vmid }}"
+            disk: scsi0
+            storage: "{{ proxmox_template.storage }}"
+            import_from: "{{ proxmox_template_image }}"
+          delegate_to: localhost
+
+        - name: "Set the boot disk for {{ proxmox_template.name }}"
+          community.proxmox.proxmox_kvm:
+            node: "{{ proxmox_node }}"
+            vmid: "{{ proxmox_template.vmid }}"
+            update: true
+            boot: "order=scsi0"
+          delegate_to: localhost
+
+        - name: "Resize the disk for {{ proxmox_template.name }}"
+          community.proxmox.proxmox_disk:
+            vmid: "{{ proxmox_template.vmid }}"
+            disk: scsi0
+            create: disabled
+            size: "{{ proxmox_template.disk_size }}"
+          when: proxmox_template.disk_size is defined
+          delegate_to: localhost
+
+        - name: "Convert {{ proxmox_template.name }} into a template"
+          community.proxmox.proxmox_kvm:
+            node: "{{ proxmox_node }}"
+            vmid: "{{ proxmox_template.vmid }}"
+            template: true
+          delegate_to: localhost
