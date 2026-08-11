@@ -1,4 +1,10 @@
 ---
+- name: Include host networking tasks
+  ansible.builtin.include_tasks: network.yml
+  when: proxmox_network_manage
+  tags:
+    - network
+
 - name: Include firewall tasks
   ansible.builtin.include_tasks: firewall.yml
   when: proxmox_firewall_manage

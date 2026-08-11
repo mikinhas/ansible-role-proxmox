@@ -1,13 +1,8 @@
 ---
-# Master toggle for this role (set false to skip, e.g. in CI without Proxmox)
 proxmox_firewall_manage: true
 
-# Apply the configuration against the Proxmox API. Set false to build the rule
-# structures without talking to any API (e.g. in CI without a Proxmox host).
 proxmox_firewall_apply: true
 
-# Proxmox API connection (the proxmox_firewall module runs on the controller via
-# delegate_to: localhost and talks to the node's API over HTTPS).
 proxmox_api_host: "{{ ansible_host | default(inventory_hostname) }}"
 proxmox_api_user: "root@pam"
 proxmox_api_password: ""
@@ -15,21 +10,14 @@ proxmox_api_token_id: ""
 proxmox_api_token_secret: ""
 proxmox_api_validate_certs: false
 
-# Proxmox node name (for /nodes/<node>/firewall). Defaults to the short hostname.
 proxmox_node: "{{ ansible_hostname }}"
 
-# Master switch (datacenter level) + default policies.
-# policy_in/policy_out accept ACCEPT/REJECT/DROP; policy_forward only ACCEPT/DROP.
 proxmox_firewall_enable: true
 proxmox_firewall_policy_in: "ACCEPT"
 proxmox_firewall_policy_out: "ACCEPT"
 proxmox_firewall_policy_forward: "ACCEPT"
 proxmox_firewall_ebtables: true
 
-# Node firewall rules. Keep SSH (22) and the web UI (8006) to avoid lockout.
-# Each rule: action (required) + optional type (default 'in'), proto, dport,
-# source, dest, comment, enable. Positions are assigned automatically.
-# dport is a string (the API accepts ports and ranges, e.g. "8000:8100").
 proxmox_firewall_host_rules:
   - action: ACCEPT
     proto: tcp
@@ -40,5 +28,49 @@ proxmox_firewall_host_rules:
     dport: "8006"
     comment: Proxmox web UI
 
-# Datacenter (cluster) firewall rules (same shape as host rules)
 proxmox_firewall_cluster_rules: []
+proxmox_network_manage: false
+proxmox_network_apply: true
+
+proxmox_internal_bridges:
+  - iface: vmbr1
+    cidr: "10.0.0.1/24"
+
+proxmox_nat_enable: true
+proxmox_internal_subnet: "10.0.0.0/24"
+proxmox_public_interface: vmbr0
+
+proxmox_nat_port_forwards: []
+#  - { proto: tcp, port: 443, to: "10.0.0.254", comment: "HTTPS" }
+
+proxmox_template_manage: false
+
+proxmox_template_image_dir: /var/lib/vz/template/qcow
+
+proxmox_template_download_timeout: 300
+
+proxmox_templates:
+  - vmid: 9000
+    name: debian-12-cloud
+    image_url: "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2"
+    storage: local-lvm
+    bridge: vmbr0
+    cores: 2
+    memory: 2048
+    disk_size: 10   # grow the imported disk to this size in GiB (optional)
+
+proxmox_vm_manage: false
+
+proxmox_vms: []
+#  - vmid: 100
+#    name: web-01
+#    template_vmid: 9000
+#    cores: 2
+#    memory: 2048
+#    storage: local-lvm
+#    disk_size: 20
+#    ciuser: debian
+#    sshkeys: "ssh-ed25519 AAAA... user@host"
+#    ipconfig:
+#      ipconfig0: "ip=dhcp"
+#    start: true
