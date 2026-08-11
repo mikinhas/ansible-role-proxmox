@@ -26,6 +26,10 @@ ansible-galaxy collection install -r requirements.yml
   needed): datacenter options + rules and per-node rules, using the idempotent
   `community.proxmox` modules. The role runs the API calls from the controller
   (`delegate_to: localhost`).
+- Cloud-init **VM templates** built from official cloud images (`qm`), ready to
+  be cloned. Idempotent: a template is built only if its VMID does not exist.
+- **QEMU VMs** created by cloning a template and applying cloud-init (user, SSH
+  key, IP). Idempotent: a VM is created only if its VMID does not exist.
 
 ## Supported Platforms
 
@@ -107,6 +111,51 @@ proxmox_nat_port_forwards:
 > dropped on the *next* `systemctl stop` — delete it by hand (`iptables -t nat
 > -D ...`) or reboot the node to clear it immediately.
 
+### VM templates
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `proxmox_template_manage` | `false` | Build cloud-init templates (toggle) |
+| `proxmox_template_image_dir` | `/var/lib/vz/template/qcow` | Where cloud images are cached on the node |
+| `proxmox_templates` | Debian 12 example | List of templates to build |
+
+Each template entry: `vmid` (required), `name` (required), `image_url`
+(required), `storage` (required), plus optional `image_checksum`, `bridge`
+(default `vmbr0`), `cores` (`2`), `memory` (`2048`), `disk_size` (grow the disk,
+in GiB, e.g. `10`).
+
+Templates are built with the `community.proxmox` modules (`proxmox_kvm` +
+`proxmox_disk`) over the API (`delegate_to: localhost`), like the firewall — no
+`qm`/SSH shell commands. Only the cloud image **download** runs on the node.
+
+> ⚠️ **Requirements:**
+> - `api_user` must be **`root@pam`**: `proxmox_disk` imports the disk from an
+>   absolute path, which Proxmox only allows for root.
+> - The play targets the node with `become: true` so the image can be written to
+>   `proxmox_template_image_dir` on it.
+> - A template is built only if its VMID does not already exist (delete the VM to
+>   rebuild it).
+
+### Virtual machines
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `proxmox_vm_manage` | `false` | Create VMs (toggle) |
+| `proxmox_vms` | `[]` | List of VMs to create |
+
+Each VM entry: `vmid` (required), `name` (required), `template_vmid` (required,
+the source template to clone), plus optional `storage` (target; default = the
+template's), `full` (default `true`), `cores`, `memory`, `disk_size` (grow
+`scsi0`, in GiB), `onboot`, `start` (default `true`), and cloud-init settings:
+`ciuser`, `cipassword`, `sshkeys`, `nameservers`, `searchdomains`, and
+`ipconfig` (a dict, e.g. `{ipconfig0: "ip=dhcp"}` or
+`{ipconfig0: "ip=10.0.0.5/24,gw=10.0.0.1"}`).
+
+VMs are cloned and configured with `proxmox_kvm` over the API
+(`delegate_to: localhost`). A VM is created only if its VMID does not already
+exist; the template referenced by `template_vmid` must exist first (build it via
+`proxmox_template_manage`).
+
 ## Usage
 
 Internal NAT bridge for the VMs (run on the node with `become`):
@@ -135,6 +184,48 @@ Internal NAT bridge for the VMs (run on the node with `become`):
         proxmox_firewall_host_rules:
           - { action: ACCEPT, proto: tcp, dport: "22", comment: SSH }
           - { action: ACCEPT, proto: tcp, dport: "8006", comment: "Proxmox web UI" }
+```
+
+```yaml
+- hosts: proxmox
+  become: true
+  roles:
+    - role: mikinhas.proxmox
+      vars:
+        proxmox_template_manage: true
+        proxmox_api_user: "root@pam"
+        proxmox_api_token_id: "root@pam!templates"
+        proxmox_api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+        proxmox_templates:
+          - vmid: 9000
+            name: debian-12-cloud
+            image_url: "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2"
+            storage: local
+            disk_size: 10
+```
+
+```yaml
+- hosts: proxmox
+  roles:
+    - role: mikinhas.proxmox
+      vars:
+        proxmox_vm_manage: true
+        proxmox_api_user: "root@pam"
+        proxmox_api_token_id: "root@pam!vms"
+        proxmox_api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+        proxmox_vms:
+          - vmid: 100
+            name: web-01
+            template_vmid: 9000
+            cores: 2
+            memory: 2048
+            storage: local
+            disk_size: 20
+            ciuser: debian
+            sshkeys: "{{ vault_ssh_public_key }}"
+            ipconfig:
+              ipconfig0: "ip=dhcp"
+            start: true
 ```
 
 ## License
