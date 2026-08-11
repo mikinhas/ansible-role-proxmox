@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+# Internal NAT bridge for VMs — managed by the mikinhas.proxmox role.
+# Do not edit by hand; change the proxmox_internal_* variables instead.
+auto {{ proxmox_internal_bridge }}
+iface {{ proxmox_internal_bridge }} inet static
+    address {{ proxmox_internal_cidr }}
+    bridge-ports none
+    bridge-stp off
+    bridge-fd 0
+{% if proxmox_nat_enable %}
+    # Masquerade VM traffic out the public interface (outbound internet for VMs)
+    post-up   iptables -t nat -A POSTROUTING -s '{{ proxmox_internal_subnet }}' -o {{ proxmox_public_interface }} -j MASQUERADE
+    post-down iptables -t nat -D POSTROUTING -s '{{ proxmox_internal_subnet }}' -o {{ proxmox_public_interface }} -j MASQUERADE
+{% endif %}

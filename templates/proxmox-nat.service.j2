@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+# Managed by the mikinhas.proxmox role — do not edit by hand; change the
+# proxmox_nat_* / proxmox_internal_* variables instead.
+[Unit]
+Description=NAT for the Proxmox internal VM subnet ({{ proxmox_internal_subnet }})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c '/usr/sbin/iptables -t nat -C POSTROUTING -s {{ proxmox_internal_subnet }} -o {{ proxmox_public_interface }} -j MASQUERADE 2>/dev/null || /usr/sbin/iptables -t nat -A POSTROUTING -s {{ proxmox_internal_subnet }} -o {{ proxmox_public_interface }} -j MASQUERADE'
+{% for forward in proxmox_nat_port_forwards %}
+{%- set dnat = 'PREROUTING -i ' ~ proxmox_public_interface ~ ' -p ' ~ forward.proto ~ ' --dport ' ~ forward.port ~ ' -j DNAT --to-destination ' ~ forward.to ~ ':' ~ forward.port %}
+{%- set hairpin = 'POSTROUTING -s ' ~ proxmox_internal_subnet ~ ' -d ' ~ forward.to ~ ' -p ' ~ forward.proto ~ ' --dport ' ~ forward.port ~ ' -j MASQUERADE' %}
+# {{ forward.comment | default(forward.proto ~ '/' ~ forward.port) }} -> {{ forward.to }}, then hairpin
+ExecStart=/bin/sh -c '/usr/sbin/iptables -t nat -C {{ dnat }} 2>/dev/null || /usr/sbin/iptables -t nat -A {{ dnat }}'
+ExecStart=/bin/sh -c '/usr/sbin/iptables -t nat -C {{ hairpin }} 2>/dev/null || /usr/sbin/iptables -t nat -A {{ hairpin }}'
+{% endfor %}
+ExecStop=/bin/sh -c '/usr/sbin/iptables -t nat -D POSTROUTING -s {{ proxmox_internal_subnet }} -o {{ proxmox_public_interface }} -j MASQUERADE 2>/dev/null || true'
+{% for forward in proxmox_nat_port_forwards %}
+{%- set dnat = 'PREROUTING -i ' ~ proxmox_public_interface ~ ' -p ' ~ forward.proto ~ ' --dport ' ~ forward.port ~ ' -j DNAT --to-destination ' ~ forward.to ~ ':' ~ forward.port %}
+{%- set hairpin = 'POSTROUTING -s ' ~ proxmox_internal_subnet ~ ' -d ' ~ forward.to ~ ' -p ' ~ forward.proto ~ ' --dport ' ~ forward.port ~ ' -j MASQUERADE' %}
+ExecStop=/bin/sh -c '/usr/sbin/iptables -t nat -D {{ dnat }} 2>/dev/null || true'
+ExecStop=/bin/sh -c '/usr/sbin/iptables -t nat -D {{ hairpin }} 2>/dev/null || true'
+{% endfor %}
+
+[Install]
+WantedBy=multi-user.target

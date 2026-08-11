@@ -1,0 +1,24 @@
+---
+- name: Apply Proxmox network configuration
+  community.proxmox.proxmox_node_network:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_password: "{{ proxmox_api_password or omit }}"
+    api_token_id: "{{ proxmox_api_token_id or omit }}"
+    api_token_secret: "{{ proxmox_api_token_secret or omit }}"
+    validate_certs: "{{ proxmox_api_validate_certs }}"
+    node: "{{ proxmox_node }}"
+    state: apply
+  delegate_to: localhost
+  when: proxmox_network_apply
+
+- name: Restart the Proxmox NAT service
+  ansible.builtin.systemd:
+    name: proxmox-nat
+    state: restarted
+    enabled: true
+    daemon_reload: true
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
