@@ -1,9 +1,16 @@
 ---
+- name: Reset firewall rule accumulators
+  ansible.builtin.set_fact:
+    proxmox_node_rules: []
+    proxmox_cluster_rules: []
+
 - name: Build node firewall rules
   ansible.builtin.set_fact:
     proxmox_node_rules: >-
       {{ proxmox_node_rules | default([])
-         + [item | combine({'pos': idx, 'type': item.type | default('in')})] }}
+         + [item | combine({'pos': idx,
+                            'type': item.type | default('in'),
+                            'enable': item.enable | default(true)})] }}
   loop: "{{ proxmox_firewall_host_rules }}"
   loop_control:
     index_var: idx
@@ -13,7 +20,9 @@
   ansible.builtin.set_fact:
     proxmox_cluster_rules: >-
       {{ proxmox_cluster_rules | default([])
-         + [item | combine({'pos': idx, 'type': item.type | default('in')})] }}
+         + [item | combine({'pos': idx,
+                            'type': item.type | default('in'),
+                            'enable': item.enable | default(true)})] }}
   loop: "{{ proxmox_firewall_cluster_rules }}"
   loop_control:
     index_var: idx
