@@ -3,7 +3,7 @@ galaxy_info:
   role_name: proxmox
   namespace: mikinhas
   author: Michael MACHADO
-  description: Proxmox VE host configuration (firewall)
+  description: Proxmox VE host configuration (firewall, VM templates, VMs)
   license: "MIT"
   min_ansible_version: "2.16"
   platforms:
@@ -15,4 +15,6 @@ galaxy_info:
     - proxmox
     - firewall
     - security
+    - virtualization
+    - vm
     - debian
