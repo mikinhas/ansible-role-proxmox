@@ -1,0 +1,7 @@
+---
+- name: Create virtual machines
+  ansible.builtin.include_tasks: vm_create.yml
+  loop: "{{ proxmox_vms }}"
+  loop_control:
+    loop_var: proxmox_vm
+    label: "{{ proxmox_vm.name }} ({{ proxmox_vm.vmid }})"

@@ -1,0 +1,69 @@
+---
+- name: "Create VM {{ proxmox_vm.name }}"
+  module_defaults:
+    community.proxmox.proxmox_vm_info: &pve_api
+      api_host: "{{ proxmox_api_host }}"
+      api_user: "{{ proxmox_api_user }}"
+      api_password: "{{ proxmox_api_password or omit }}"
+      api_token_id: "{{ proxmox_api_token_id or omit }}"
+      api_token_secret: "{{ proxmox_api_token_secret or omit }}"
+      validate_certs: "{{ proxmox_api_validate_certs }}"
+    community.proxmox.proxmox_kvm: *pve_api
+    community.proxmox.proxmox_disk: *pve_api
+  block:
+    - name: "Gather existing QEMU VMs on {{ proxmox_node }}"
+      community.proxmox.proxmox_vm_info:
+        node: "{{ proxmox_node }}"
+        type: qemu
+      delegate_to: localhost
+      register: proxmox_vm_existing
+
+    - name: "Provision VM {{ proxmox_vm.name }}"
+      when: >-
+        proxmox_vm.vmid | int
+        not in (proxmox_vm_existing.proxmox_vms | map(attribute='vmid') | map('int') | list)
+      block:
+        - name: "Clone template {{ proxmox_vm.template_vmid }} into {{ proxmox_vm.name }}"
+          community.proxmox.proxmox_kvm:
+            node: "{{ proxmox_node }}"
+            clone: "{{ proxmox_vm.name }}"
+            vmid: "{{ proxmox_vm.template_vmid }}"
+            newid: "{{ proxmox_vm.vmid }}"
+            name: "{{ proxmox_vm.name }}"
+            storage: "{{ proxmox_vm.storage | default(omit) }}"
+            full: "{{ proxmox_vm.full | default(true) }}"
+            timeout: "{{ proxmox_vm.clone_timeout | default(300) }}"
+          delegate_to: localhost
+
+        - name: "Configure resources and cloud-init for {{ proxmox_vm.name }}"
+          community.proxmox.proxmox_kvm:
+            node: "{{ proxmox_node }}"
+            vmid: "{{ proxmox_vm.vmid }}"
+            update: true
+            cores: "{{ proxmox_vm.cores | default(omit) }}"
+            memory: "{{ proxmox_vm.memory | default(omit) }}"
+            ciuser: "{{ proxmox_vm.ciuser | default(omit) }}"
+            cipassword: "{{ proxmox_vm.cipassword | default(omit) }}"
+            sshkeys: "{{ proxmox_vm.sshkeys | default(omit) }}"
+            ipconfig: "{{ proxmox_vm.ipconfig | default(omit) }}"
+            nameservers: "{{ proxmox_vm.nameservers | default(omit) }}"
+            searchdomains: "{{ proxmox_vm.searchdomains | default(omit) }}"
+            onboot: "{{ proxmox_vm.onboot | default(omit) }}"
+          delegate_to: localhost
+
+        - name: "Resize the disk for {{ proxmox_vm.name }}"
+          community.proxmox.proxmox_disk:
+            vmid: "{{ proxmox_vm.vmid }}"
+            disk: scsi0
+            create: disabled
+            size: "{{ proxmox_vm.disk_size }}"
+          when: proxmox_vm.disk_size is defined
+          delegate_to: localhost
+
+        - name: "Start VM {{ proxmox_vm.name }}"
+          community.proxmox.proxmox_kvm:
+            node: "{{ proxmox_node }}"
+            vmid: "{{ proxmox_vm.vmid }}"
+            state: started
+          when: proxmox_vm.start | default(true)
+          delegate_to: localhost
