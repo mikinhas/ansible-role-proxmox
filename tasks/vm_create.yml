@@ -55,8 +55,8 @@
           community.proxmox.proxmox_disk:
             vmid: "{{ proxmox_vm.vmid }}"
             disk: scsi0
-            create: disabled
-            size: "{{ proxmox_vm.disk_size }}"
+            state: resized
+            size: "{{ proxmox_vm.disk_size }}G"
           when: proxmox_vm.disk_size is defined
           delegate_to: localhost
 
