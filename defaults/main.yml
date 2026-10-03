@@ -61,6 +61,9 @@ proxmox_templates:
 
 proxmox_vm_manage: false
 
+proxmox_iso_dir: /var/lib/vz/template/iso
+proxmox_iso_storage: local
+
 proxmox_vms: []
 #  - vmid: 100
 #    name: web-01
@@ -74,3 +77,15 @@ proxmox_vms: []
 #    ipconfig:
 #      ipconfig0: "ip=dhcp"
 #    start: true
+#  - vmid: 101
+#    name: installer-01   # no template_vmid: created empty, boots on the ISO
+#    iso_url: "https://example.com/installer.iso"
+#    cores: 2
+#    memory: 2048
+#    storage: local-lvm
+#    disk_size: 20
+#    bridge: vmbr0
+#    macaddr: "02:00:00:aa:bb:cc"
+#    bios: ovmf
+#    efidisk0: { storage: local-lvm, efitype: 4m, pre_enrolled_keys: false }
+#    tpmstate0: { storage: local-lvm, version: "2.0" }

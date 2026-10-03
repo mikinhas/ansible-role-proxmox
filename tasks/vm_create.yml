@@ -34,6 +34,7 @@
             full: "{{ proxmox_vm.full | default(true) }}"
             timeout: "{{ proxmox_vm.clone_timeout | default(300) }}"
           delegate_to: localhost
+          when: proxmox_vm.template_vmid is defined
 
         - name: "Configure resources and cloud-init for {{ proxmox_vm.name }}"
           community.proxmox.proxmox_kvm:
@@ -50,6 +51,7 @@
             searchdomains: "{{ proxmox_vm.searchdomains | default(omit) }}"
             onboot: "{{ proxmox_vm.onboot | default(omit) }}"
           delegate_to: localhost
+          when: proxmox_vm.template_vmid is defined
 
         - name: "Resize the disk for {{ proxmox_vm.name }}"
           community.proxmox.proxmox_disk:
@@ -57,7 +59,49 @@
             disk: scsi0
             state: resized
             size: "{{ proxmox_vm.disk_size }}G"
-          when: proxmox_vm.disk_size is defined
+          when:
+            - proxmox_vm.template_vmid is defined
+            - proxmox_vm.disk_size is defined
+          delegate_to: localhost
+
+        - name: "Download the installer ISO for {{ proxmox_vm.name }}"
+          ansible.builtin.get_url:
+            url: "{{ proxmox_vm.iso_url }}"
+            dest: "{{ proxmox_iso_dir }}/{{ proxmox_vm.iso_url | basename }}"
+            checksum: "{{ proxmox_vm.iso_checksum | default(omit) }}"
+            timeout: "{{ proxmox_template_download_timeout }}"
+            mode: "0644"
+          when: proxmox_vm.iso_url is defined
+
+        - name: "Create VM {{ proxmox_vm.name }} booting on its installer ISO"
+          community.proxmox.proxmox_kvm:
+            node: "{{ proxmox_node }}"
+            vmid: "{{ proxmox_vm.vmid }}"
+            name: "{{ proxmox_vm.name }}"
+            cores: "{{ proxmox_vm.cores | default(2) }}"
+            memory: "{{ proxmox_vm.memory | default(2048) }}"
+            bios: "{{ proxmox_vm.bios | default(omit) }}"
+            efidisk0: "{{ proxmox_vm.efidisk0 | default(omit) }}"
+            tpmstate0: "{{ proxmox_vm.tpmstate0 | default(omit) }}"
+            scsihw: virtio-scsi-single
+            scsi:
+              scsi0: >-
+                {{ proxmox_vm.storage }}:{{ proxmox_vm.disk_size }}{{
+                  ',format=' ~ proxmox_vm.disk_format if proxmox_vm.disk_format is defined else '' }}
+            ide:
+              ide2: "{{ proxmox_iso_storage }}:iso/{{ proxmox_vm.iso_url | basename }},media=cdrom"
+            net:
+              net0: >-
+                virtio,bridge={{ proxmox_vm.bridge | default('vmbr0') }}{{
+                  ',macaddr=' ~ proxmox_vm.macaddr if proxmox_vm.macaddr is defined else '' }}
+            # The empty disk is not bootable yet, so the first boot falls through
+            # to the installer; once installed, the disk wins.
+            boot: "order=scsi0;ide2"
+            ostype: l26
+            cpu: host
+            machine: q35
+            onboot: "{{ proxmox_vm.onboot | default(omit) }}"
+          when: proxmox_vm.iso_url is defined
           delegate_to: localhost
 
         - name: "Start VM {{ proxmox_vm.name }}"

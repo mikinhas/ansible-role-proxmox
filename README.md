@@ -29,7 +29,8 @@ ansible-galaxy collection install -r requirements.yml
 - Cloud-init **VM templates** built from official cloud images (`qm`), ready to
   be cloned. Idempotent: a template is built only if its VMID does not exist.
 - **QEMU VMs** created by cloning a template and applying cloud-init (user, SSH
-  key, IP). Idempotent: a VM is created only if its VMID does not exist.
+  key, IP), or created empty and booted on an installer ISO (UEFI and TPM
+  supported). Idempotent: a VM is created only if its VMID does not exist.
 
 ## Supported Platforms
 
@@ -142,6 +143,8 @@ Templates are built with the `community.proxmox` modules (`proxmox_kvm` +
 | --- | --- | --- |
 | `proxmox_vm_manage` | `false` | Create VMs (toggle) |
 | `proxmox_vms` | `[]` | List of VMs to create |
+| `proxmox_iso_dir` | `/var/lib/vz/template/iso` | Where installer ISOs are downloaded on the node |
+| `proxmox_iso_storage` | `local` | Proxmox storage backed by `proxmox_iso_dir` |
 
 Each VM entry: `vmid` (required), `name` (required), `template_vmid` (required,
 the source template to clone), plus optional `storage` (target; default = the
@@ -155,6 +158,29 @@ VMs are cloned and configured with `proxmox_kvm` over the API
 (`delegate_to: localhost`). A VM is created only if its VMID does not already
 exist; the template referenced by `template_vmid` must exist first (build it via
 `proxmox_template_manage`).
+
+A VM entry with `iso_url` instead of `template_vmid` is created empty and boots
+on that ISO, for operating systems that have no cloud image and must be
+installed by hand from the Proxmox console. Such an entry takes `vmid`, `name`,
+`iso_url`, `storage` and `disk_size` (all required), plus optional
+`iso_checksum`, `disk_format` (e.g. `qcow2` on a directory storage), `bridge`
+(default `vmbr0`), `macaddr` (fixed MAC address, e.g. the virtual MAC of an
+additional IP), `cores` (`2`), `memory` (`2048`), `onboot`, `start`, and the
+firmware settings `bios`, `efidisk0` and `tpmstate0` (passed as-is to
+`proxmox_kvm`). Cloud-init settings are ignored. The ISO is downloaded on the
+node, so the same requirements as for templates apply.
+
+```yaml
+proxmox_vms:
+  - vmid: 101
+    name: installer-01
+    iso_url: "https://example.com/installer.iso"
+    storage: local-lvm
+    disk_size: 20
+    bios: ovmf
+    efidisk0: { storage: local-lvm, efitype: 4m, pre_enrolled_keys: false }
+    tpmstate0: { storage: local-lvm, version: "2.0" }
+```
 
 ## Usage
 
